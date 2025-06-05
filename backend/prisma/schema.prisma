@@ -1,0 +1,54 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Users {
+  id        Int       @id @default(autoincrement()) // Primary key
+  names     String    // Full name of the user
+  email     String    @unique                     // Unique email address
+  phone     String?   // Optional phone number
+  password  String    // Password for authentication
+  role      Role?     // Optional role (using the Role enum)
+  status    AccountStatus @default(ACTIVE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+
+  @@map("users") // Maps the model to a table named "users"
+}
+
+model ExchangeRate {
+  id          Int      @id @default(autoincrement())
+  base        String   @db.VarChar(3)  // EUR, USD, RWF
+  target      String   @db.VarChar(3)
+  buyRate     Decimal  @db.Decimal(18,6) // Rate when buying base currency
+  sellRate    Decimal  @db.Decimal(18,6) // Rate when selling base currency
+  provider    String?                 // "fixer", "alpha-vantage", "manual"
+  isActive    Boolean  @default(true) // For rate versioning
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([base, target, createdAt]) // Prevent duplicate entries
+  @@index([base, target])
+}
+
+enum Role {
+  ADMIN
+  TELLER 
+}
+enum AccountStatus {
+  ACTIVE
+  INACTIVE
+}
