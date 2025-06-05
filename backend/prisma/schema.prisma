@@ -1,0 +1,109 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Users {
+  id        Int       @id @default(autoincrement()) // Primary key
+  names     String    // Full name of the user
+  email     String    @unique                     // Unique email address
+  phone     String?   // Optional phone number
+  password  String    // Password for authentication
+  role      Role?     // Optional role (using the Role enum)
+  status    AccountStatus @default(ACTIVE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tellerBalances TellerBalance[] @relation("UserTellerBalances")
+  transactions   Transaction[]   @relation("TellerTransactions")
+  @@map("users") // Maps the model to a table named "users"
+  Transaction Transaction[]
+}
+
+model ExchangeRate {
+  id          Int      @id @default(autoincrement())
+  base        String   @db.VarChar(3)  // EUR, USD, RWF
+  target      String   @db.VarChar(3)
+  buyRate     Decimal  @db.Decimal(18,6) // Rate when buying base currency
+  sellRate    Decimal  @db.Decimal(18,6) // Rate when selling base currency
+  provider    String?                 // "fixer", "alpha-vantage", "manual"
+  isActive    Boolean  @default(true) // For rate versioning
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([base, target, createdAt]) // Prevent duplicate entries
+  @@index([base, target])
+  transactions  Transaction[]
+}
+
+model Currency {
+  id        Int     @id @default(autoincrement())
+  code      String  @unique // e.g., 'USD', 'EUR'
+  name      String  // e.g., 'US Dollar'
+  symbol    String? // e.g., '$'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations (if needed)
+  // exchangeRatesBase    ExchangeRate[] @relation("BaseCurrency")
+  // exchangeRatesTarget  ExchangeRate[] @relation("TargetCurrency")
+  tellerBalances      TellerBalance[]
+  transactionsFrom    Transaction[]   @relation("FromCurrency")
+  transactionsTo      Transaction[]   @relation("ToCurrency")
+}
+model TellerBalance{
+  id        Int      @id @default(autoincrement())
+  userId    Int      // Foreign key to Users
+  currencyId  Int   // e.g., 'USD', 'EUR'
+  initialAmount Decimal  @db.Decimal(18,2)
+  currentAmount Decimal  @db.Decimal(18,2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user      Users    @relation("UserTellerBalances", fields: [userId], references: [id])
+  currency  Currency @relation(fields: [currencyId], references: [id])
+
+  @@unique([userId, currencyId]) // Prevent duplicate balances for the same user and currency 
+}
+model Transaction {
+  id            Int      @id @default(autoincrement())
+  tellerId      Int
+  teller        Users    @relation(fields: [tellerId], references: [id])
+  fromCurrencyId Int
+  fromCurrency  Currency @relation("FromCurrency", fields: [fromCurrencyId], references: [id])
+  toCurrencyId   Int
+  toCurrency    Currency @relation("ToCurrency", fields: [toCurrencyId], references: [id])
+  fromAmount    Decimal  @db.Decimal(18,2)
+  toAmount      Decimal  @db.Decimal(18,2)
+  rate          Decimal  @db.Decimal(18,6) // The rate used for this transaction
+  exchangeRateId Int?
+  exchangeRate  ExchangeRate? @relation(fields: [exchangeRateId], references: [id])
+  createdAt     DateTime @default(now())
+
+  // Optionally, track profit per transaction
+  
+profit        Decimal? @db.Decimal(18,2)
+
+Users Users[] @relation("TellerTransactions")
+}
+
+enum Role {
+  ADMIN
+  TELLER 
+}
+enum AccountStatus {
+  ACTIVE
+  INACTIVE
+}
